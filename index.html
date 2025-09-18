@@ -494,6 +494,38 @@ window.addEventListener('beforeunload', async (e) => {
     }
   } catch (err) { console.error(err); }
 });
+  // AUTO-LOAD SESSION IF EXISTS
+window.addEventListener('DOMContentLoaded', async () => {
+  const sessionID = localStorage.getItem('currentSessionID');
+  if (!sessionID) return;
+
+  try {
+    const data = await getBin(sessionID);
+    const session = data.record;
+
+    // Show session info
+    document.getElementById('sessionInfo').innerHTML = `Session ID: <b style="color:var(--neon-cyan);">${sessionID}</b>`;
+    const shareLinkEl = document.getElementById('shareLink');
+    const participantPageUrl = `${window.location.origin}/participant.html`;
+    const shareUrl = `${participantPageUrl}?session=${sessionID}`;
+    document.getElementById('shareSection').style.display = 'block';
+    shareLinkEl.textContent = shareUrl;
+
+    shareLinkEl.onclick = () => {
+      navigator.clipboard.writeText(shareUrl);
+      const original = shareLinkEl.textContent;
+      shareLinkEl.textContent = 'Copied!';
+      setTimeout(() => shareLinkEl.textContent = original, 2000);
+    };
+
+    // Render participants
+    renderParticipants(sessionID);
+  } catch (err) {
+    console.error(err);
+    // If session no longer exists, remove it from localStorage
+    localStorage.removeItem('currentSessionID');
+  }
+});
 </script>
 </body>
 </html>
