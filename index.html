@@ -316,209 +316,119 @@ tr:hover {
 </div>
 
 <script>
-// JSONBin.io Configuration
-const JSONBIN_API_KEY = '$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
+    const JSONBIN_API_KEY = '$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
 const JSONBIN_BASE_URL = 'https://api.jsonbin.io/v3/b';
 
-// Duration helper
+// Helper: convert duration to milliseconds
 function durationToMs(value, unit) {
-  switch(unit) {
-    case 'minutes': return value*60*1000;
-    case 'hours': return value*60*60*1000;
-    case 'days': return value*24*60*60*1000;
+  switch (unit) {
+    case 'minutes': return value * 60 * 1000;
+    case 'hours': return value * 60 * 60 * 1000;
+    case 'days': return value * 24 * 60 * 60 * 1000;
   }
 }
 
-// Create a new bin on JSONBin.io
+// API helpers
 async function createBin(sessionData) {
-  try {
-    const response = await fetch(JSONBIN_BASE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_API_KEY,
-        'X-Bin-Name': 'VCF Session - ' + sessionData.owner
-      },
-      body: JSON.stringify(sessionData)
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to create session');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error creating bin:', error);
-    throw error;
-  }
+  const res = await fetch(JSONBIN_BASE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': JSONBIN_API_KEY,
+      'X-Bin-Name': `VCF Session - ${sessionData.owner}`
+    },
+    body: JSON.stringify(sessionData)
+  });
+  if (!res.ok) throw new Error('Failed to create session');
+  return await res.json();
 }
 
-// Update bin on JSONBin.io
 async function updateBin(binId, sessionData) {
-  try {
-    const response = await fetch(`${JSONBIN_BASE_URL}/${binId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_API_KEY
-      },
-      body: JSON.stringify(sessionData)
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to update session');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error updating bin:', error);
-    throw error;
-  }
+  const res = await fetch(`${JSONBIN_BASE_URL}/${binId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+    body: JSON.stringify(sessionData)
+  });
+  if (!res.ok) throw new Error('Failed to update session');
+  return await res.json();
 }
 
-// Get bin data from JSONBin.io
 async function getBin(binId) {
-  try {
-    const response = await fetch(`${JSONBIN_BASE_URL}/${binId}`, {
-      headers: {
-        'X-Master-Key': JSONBIN_API_KEY
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to get session data');
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error getting bin:', error);
-    throw error;
-  }
+  const res = await fetch(`${JSONBIN_BASE_URL}/${binId}`, { headers: { 'X-Master-Key': JSONBIN_API_KEY }});
+  if (!res.ok) throw new Error('Failed to fetch session');
+  return await res.json();
 }
 
-// Create session
+// CREATE SESSION
 document.getElementById('createSessionBtn').addEventListener('click', async () => {
-  const ownerName = document.getElementById('ownerName').value.trim();
-  const max = parseInt(document.getElementById('maxParticipants').value);
+  const owner = document.getElementById('ownerName').value.trim();
+  const maxParticipants = parseInt(document.getElementById('maxParticipants').value);
   const duration = parseInt(document.getElementById('duration').value);
   const unit = document.getElementById('durationUnit').value;
   const groupLink = document.getElementById('groupLink').value.trim();
 
-  if(!ownerName || !max || !duration || !groupLink) { 
-    alert("Please fill all fields"); 
-    return; 
-  }
+  if (!owner || !maxParticipants || !duration || !groupLink) return alert("Fill all fields");
 
   try {
     showLoading(true);
-    
     const expiry = Date.now() + durationToMs(duration, unit);
-    const sessionData = { 
-      owner: ownerName, 
-      maxParticipants: max, 
-      expiry: expiry, 
-      participants: [],
-      groupLink: groupLink
-    };
-
+    const sessionData = { owner, maxParticipants, expiry, participants: [], groupLink, downloaded: false };
     const result = await createBin(sessionData);
     const sessionID = result.metadata.id;
-    
     localStorage.setItem('currentSessionID', sessionID);
 
-    document.getElementById('sessionInfo').innerHTML = `Session ID: <b style="color:var(--neon-cyan);">${sessionID}</b> (share this with participants)`;
-    
-    // Show share section with link
-    const shareSection = document.getElementById('shareSection');
-    shareSection.style.display = 'block';
-    
-    // Get the current page URL without parameters
+    // Show shareable link
     const participantPageUrl = window.location.href.replace('owner.html', 'index.html');
-    const shareUrl = participantPageUrl + '?session=' + sessionID;
+    const shareUrl = `${participantPageUrl}?session=${sessionID}`;
+    document.getElementById('sessionInfo').innerHTML = `Session ID: <b style="color:var(--neon-cyan);">${sessionID}</b>`;
+    document.getElementById('shareSection').style.display = 'block';
     document.getElementById('shareLink').textContent = shareUrl;
-    
-    renderParticipants();
-  } catch (error) {
-    alert("Error creating session. Please try again.");
-    console.error('Error creating session:', error);
-  } finally {
-    showLoading(false);
-  }
+
+    renderParticipants(sessionID);
+  } catch (err) {
+    console.error(err);
+    alert("Error creating session");
+  } finally { showLoading(false); }
 });
 
-// Copy share link to clipboard
-document.getElementById('shareLink').addEventListener('click', function() {
-  const tempTextArea = document.createElement('textarea');
-  tempTextArea.value = this.textContent;
-  document.body.appendChild(tempTextArea);
-  tempTextArea.select();
-  document.execCommand('copy');
-  document.body.removeChild(tempTextArea);
-  
-  const originalText = this.textContent;
-  this.textContent = 'Copied to clipboard!';
-  
-  setTimeout(() => {
-    this.textContent = originalText;
-  }, 2000);
-});
-
-// Render participant list
-async function renderParticipants() {
-  const sessionID = localStorage.getItem('currentSessionID');
-  if(!sessionID) return;
-  
+// RENDER PARTICIPANTS
+async function renderParticipants(sessionID) {
   try {
     const data = await getBin(sessionID);
     const session = data.record;
     const tbody = document.querySelector('#participantsTable tbody');
     tbody.innerHTML = '';
-
     session.participants.forEach((p, idx) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${p.name}</td><td>${p.number}</td>
-        <td><button class="action-btn" onclick="removeParticipant(${idx})">Remove</button></td>`;
+                      <td><button class="action-btn" onclick="removeParticipant(${idx})">Remove</button></td>`;
       tbody.appendChild(tr);
     });
-  } catch (error) {
-    console.error('Error rendering participants:', error);
-  }
+  } catch (err) { console.error(err); }
 }
 
-// Remove participant
+// REMOVE PARTICIPANT
 async function removeParticipant(index) {
   const sessionID = localStorage.getItem('currentSessionID');
   if (!sessionID) return;
-  
   try {
     const data = await getBin(sessionID);
     const session = data.record;
     session.participants.splice(index, 1);
-    
     await updateBin(sessionID, session);
-    renderParticipants();
-  } catch (error) {
-    alert("Error removing participant. Please try again.");
-    console.error('Error removing participant:', error);
-  }
+    renderParticipants(sessionID);
+  } catch (err) { console.error(err); }
 }
 
-// Download VCF
+// DOWNLOAD VCF
 document.getElementById('downloadVCFBtn').addEventListener('click', async () => {
   const sessionID = localStorage.getItem('currentSessionID');
-  if (!sessionID) {
-    alert("No active session found");
-    return;
-  }
-  
+  if (!sessionID) return alert("No active session");
+
   try {
     const data = await getBin(sessionID);
     const session = data.record;
-    
-    if(session.participants.length === 0) { 
-      alert("No participants to download"); 
-      return; 
-    }
+    if (session.participants.length === 0) return alert("No participants to download");
 
     let vCardAll = '';
     session.participants.forEach(p => {
@@ -526,45 +436,48 @@ document.getElementById('downloadVCFBtn').addEventListener('click', async () => 
 VERSION:3.0
 FN:${p.name}
 TEL;TYPE=CELL:${p.number}
-NOTE:⚠️ Don't forget to put your number in International format (with + sign). Saved from session ${sessionID}
+NOTE: Saved from session ${sessionID}
 END:VCARD
 `;
     });
 
-    const blob = new Blob([vCardAll], {type:'text/vcard'});
+    const blob = new Blob([vCardAll], { type: 'text/vcard' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `session-${sessionID}.vcf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  } catch (error) {
-    alert("Error downloading contacts. Please try again.");
-    console.error('Error downloading VCF:', error);
-  }
+
+    // Mark session as downloaded
+    const updatedSession = { ...session, downloaded: true };
+    await updateBin(sessionID, updatedSession);
+    alert("Session downloaded! You can now leave.");
+  } catch (err) { console.error(err); alert("Error downloading VCF"); }
 });
 
+// LOCK CREATOR UNTIL DOWNLOAD OR EXPIRY
+window.addEventListener('beforeunload', async (e) => {
+  const sessionID = localStorage.getItem('currentSessionID');
+  if (!sessionID) return;
+
+  try {
+    const data = await getBin(sessionID);
+    const session = data.record;
+    if (!session.downloaded && Date.now() < session.expiry) {
+      e.preventDefault();
+      e.returnValue = 'Session is active. Please download before leaving.';
+    }
+  } catch (err) { console.error(err); }
+});
+
+// LOADING UI
 function showLoading(loading) {
   const btn = document.getElementById('createSessionBtn');
-  if (loading) {
-    btn.classList.add('loading');
-    btn.textContent = 'Creating...';
-  } else {
-    btn.classList.remove('loading');
-    btn.textContent = 'Create Session';
-  }
+  if (loading) { btn.classList.add('loading'); btn.textContent='Creating...'; }
+  else { btn.classList.remove('loading'); btn.textContent='Create Session'; }
 }
 
-// Add visual effects to inputs
-document.querySelectorAll('input, select').forEach(input => {
-  input.addEventListener('focus', () => {
-    input.style.boxShadow = '0 0 15px rgba(188, 19, 254, 0.6)';
-  });
-  
-  input.addEventListener('blur', () => {
-    input.style.boxShadow = 'none';
-  });
-});
 </script>
 </body>
 </html>
