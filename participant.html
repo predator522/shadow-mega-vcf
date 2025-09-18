@@ -82,73 +82,119 @@ button:hover { transform:translateY(-2px); box-shadow:0 0 20px rgba(188,19,254,0
 </div>
 
 <script>
-const JSONBIN_API_KEY='$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
-const JSONBIN_BASE_URL='https://api.jsonbin.io/v3/b';
-const progressBar=document.getElementById('progressBar');
-const countDisplay=document.getElementById('countDisplay');
-const groupLinkBtn=document.getElementById('groupLinkBtn');
-const sessionInfo=document.getElementById('sessionInfo');
-const shareSection=document.getElementById('shareSection');
-const shareLink=document.getElementById('shareLink');
-const joinSessionBtn=document.getElementById('joinSessionBtn');
+    const JSONBIN_API_KEY = '$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
+const JSONBIN_BASE_URL = 'https://api.jsonbin.io/v3/b';
 
-function getUrlParameter(name){ name=name.replace(/[\[\]]/g,'\\$&'); const regex=new RegExp('[?&]'+name+'(=([^&#]*)|&|#|$)'); const results=regex.exec(window.location.href); if(!results) return null; if(!results[2]) return ''; return decodeURIComponent(results[2].replace(/\+/g,' '));}
+// Get sessionID from URL
+function getUrlParameter(name) {
+  name = name.replace(/[\[\]]/g, '\\$&');
+  const regex = new RegExp('[?&]'+name+'(=([^&#]*)|&|#|$)');
+  const results = regex.exec(window.location.href);
+  if (!results) return null;
+  if (!results[2]) return '';
+  return decodeURIComponent(results[2].replace(/\+/g,' '));
+}
 
-const urlSessionID=getUrlParameter('session');
-if(urlSessionID){ document.getElementById('sessionID').value=urlSessionID; document.getElementById('sessionID').disabled=true; sessionInfo.textContent="You're joining session: "+urlSessionID; shareSection.style.display='block'; shareLink.textContent=window.location.href.split('?')[0]+'?session='+urlSessionID; loadSessionData(urlSessionID);}
+const urlSessionID = getUrlParameter('session');
+if (urlSessionID) {
+  document.getElementById('sessionID').value = urlSessionID;
+  document.getElementById('sessionID').disabled = true;
+  document.getElementById('sessionInfo').textContent = "You're joining session: " + urlSessionID;
+  document.getElementById('shareSection').style.display = 'block';
+  document.getElementById('shareLink').textContent = window.location.href.split('?')[0] + '?session=' + urlSessionID;
+  loadSessionData(urlSessionID);
+}
 
-async function loadSessionData(sessionID){
-  try{ showLoading(true);
-    const response=await fetch(`${JSONBIN_BASE_URL}/${sessionID}`,{headers:{'X-Master-Key':JSONBIN_API_KEY}});
-    if(!response.ok) throw new Error('Session not found');
-    const data=await response.json();
-    const session=data.record;
+// LOAD SESSION DATA
+async function loadSessionData(sessionID) {
+  try {
+    showLoading(true);
+    const res = await fetch(`${JSONBIN_BASE_URL}/${sessionID}`, { headers: { 'X-Master-Key': JSONBIN_API_KEY }});
+    if (!res.ok) throw new Error('Session not found');
+    const data = await res.json();
+    const session = data.record;
+
+    // Update progress
     updateProgress(session);
-    if(session.groupLink) groupLinkBtn.href=session.groupLink;
-  } catch(e){ document.getElementById('participantMessage').textContent="Invalid session ID or network error"; console.error(e);}
-  finally{ showLoading(false);}
+    if (session.groupLink) document.getElementById('groupLinkBtn').href = session.groupLink;
+
+  } catch (err) {
+    document.getElementById('participantMessage').textContent = "Invalid session ID";
+    console.error(err);
+  } finally { showLoading(false); }
 }
 
-function updateProgress(session){
-  const percent=Math.floor((session.participants.length/session.maxParticipants)*100);
-  progressBar.style.width=percent+'%';
-  countDisplay.textContent=`${session.participants.length} contacts in VCF`;
-  countDisplay.classList.add('pulse');
-  setTimeout(()=>countDisplay.classList.remove('pulse'),1000);
+// UPDATE PROGRESS BAR
+function updateProgress(session) {
+  const percent = Math.floor((session.participants.length / session.maxParticipants) * 100);
+  const progressBar = document.getElementById('progressBar');
+  progressBar.style.width = percent + '%';
+  document.getElementById('countDisplay').textContent = `${session.participants.length} contacts uploaded`;
 }
 
-async function updateSession(sessionID,sessionData){
-  const response=await fetch(`${JSONBIN_BASE_URL}/${sessionID}`,{method:'PUT', headers:{'Content-Type':'application/json','X-Master-Key':JSONBIN_API_KEY}, body:JSON.stringify(sessionData)});
-  if(!response.ok) throw new Error('Failed to update session');
-  return await response.json();
+// UPDATE SESSION
+async function updateSession(sessionID, sessionData) {
+  const res = await fetch(`${JSONBIN_BASE_URL}/${sessionID}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+    body: JSON.stringify(sessionData)
+  });
+  if (!res.ok) throw new Error('Failed to update session');
+  return await res.json();
 }
 
-joinSessionBtn.addEventListener('click', async()=>{
-  const sessionID=document.getElementById('sessionID').value.trim();
-  const name=document.getElementById('participantName').value.trim();
-  const number=document.getElementById('participantNumber').value.trim();
-  if(!sessionID||!name||!number){document.getElementById('participantMessage').textContent="Please fill all fields"; return;}
-  try{ showLoading(true);
-    const response=await fetch(`${JSONBIN_BASE_URL}/${sessionID}`,{headers:{'X-Master-Key':JSONBIN_API_KEY}});
-    if(!response.ok){document.getElementById('participantMessage').textContent="Invalid session ID"; return;}
-    const data=await response.json(); const session=data.record;
-    if(Date.now()>session.expiry){document.getElementById('participantMessage').textContent="Session has expired"; return;}
-    if(session.participants.length>=session.maxParticipants){document.getElementById('participantMessage').textContent="Session is full"; return;}
-    if(!number.startsWith('+')||number.length<8){document.getElementById('participantMessage').textContent="Invalid phone number format"; return;}
-    session.participants.push({name,number});
-    await updateSession(sessionID,session);
-    document.getElementById('participantMessage').textContent=`Thanks ${name}, your contact is saved!`;
-    document.getElementById('participantName').value=''; document.getElementById('participantNumber').value='';
-    if(session.groupLink) groupLinkBtn.href=session.groupLink;
+// JOIN SESSION BUTTON
+document.getElementById('joinSessionBtn').addEventListener('click', async () => {
+  const sessionID = document.getElementById('sessionID').value.trim();
+  const name = document.getElementById('participantName').value.trim();
+  const number = document.getElementById('participantNumber').value.trim();
+  if (!sessionID || !name || !number) return document.getElementById('participantMessage').textContent = "Fill all fields";
+
+  try {
+    showLoading(true);
+    const res = await fetch(`${JSONBIN_BASE_URL}/${sessionID}`, { headers: { 'X-Master-Key': JSONBIN_API_KEY }});
+    if (!res.ok) return document.getElementById('participantMessage').textContent = "Invalid session ID";
+
+    const data = await res.json();
+    const session = data.record;
+
+    if (Date.now() > session.expiry) return document.getElementById('participantMessage').textContent = "Session expired";
+    if (session.participants.length >= session.maxParticipants) return document.getElementById('participantMessage').textContent = "Session full";
+    if (!number.startsWith('+') || number.length < 8) return document.getElementById('participantMessage').textContent = "Invalid phone number";
+
+    session.participants.push({ name, number });
+    await updateSession(sessionID, session);
+    document.getElementById('participantMessage').textContent = `Thanks ${name}, your contact is saved!`;
+    document.getElementById('participantName').value = '';
+    document.getElementById('participantNumber').value = '';
+    if (session.groupLink) document.getElementById('groupLinkBtn').href = session.groupLink;
+
     updateProgress(session);
-    if(shareSection.style.display==='none'){shareSection.style.display='block'; shareLink.textContent=window.location.href.split('?')[0]+'?session='+sessionID;}
-  } catch(e){document.getElementById('participantMessage').textContent="Error saving contact. Try again."; console.error(e);}
-  finally{showLoading(false);}
+  } catch (err) {
+    document.getElementById('participantMessage').textContent = "Error saving contact";
+    console.error(err);
+  } finally { showLoading(false); }
 });
 
-shareLink.addEventListener('click',function(){const temp=document.createElement('textarea'); temp.value=this.textContent; document.body.appendChild(temp); temp.select(); document.execCommand('copy'); document.body.removeChild(temp); const original=this.textContent; this.textContent='Copied!'; setTimeout(()=>{this.textContent=original;},2000);});
+// COPY LINK
+document.getElementById('shareLink').addEventListener('click', function() {
+  const temp = document.createElement('textarea');
+  temp.value = this.textContent;
+  document.body.appendChild(temp);
+  temp.select();
+  document.execCommand('copy');
+  document.body.removeChild(temp);
+  const original = this.textContent;
+  this.textContent = 'Copied!';
+  setTimeout(() => { this.textContent = original; }, 2000);
+});
 
-function showLoading(loading){if(loading){joinSessionBtn.classList.add('loading'); joinSessionBtn.textContent='Uploading...';}else{joinSessionBtn.classList.remove('loading'); joinSessionBtn.textContent='Upload Contact';}}
+// LOADING UI
+function showLoading(loading) {
+  const btn = document.getElementById('joinSessionBtn');
+  if (loading) { btn.classList.add('loading'); btn.textContent = 'Uploading...'; }
+  else { btn.classList.remove('loading'); btn.textContent = 'Upload Contact'; }
+}
 </script>
 
 </body>
