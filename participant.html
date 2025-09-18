@@ -34,11 +34,8 @@ button:hover { transform:translateY(-2px); box-shadow:0 0 20px rgba(188,19,254,0
 .share-link { margin:15px auto; padding:10px; background:rgba(25,0,45,0.5); border-radius:8px; border:1px solid rgba(188,19,254,0.3); max-width:400px; word-break:break-all; cursor:pointer; transition:all 0.3s ease;}
 .share-link:hover { background:rgba(35,0,65,0.5); box-shadow:0 0 10px rgba(188,19,254,0.3);}
 .loading { opacity:0.7; pointer-events:none;}
-@keyframes neonPulse { 0%{box-shadow:0 0 10px rgba(188,19,254,0.5),0 0 20px rgba(188,19,254,0.3);}50%{box-shadow:0 0 25px rgba(188,19,254,0.7),0 0 40px rgba(188,19,254,0.5);}100%{box-shadow:0 0 10px rgba(188,19,254,0.5),0 0 20px rgba(188,19,254,0.3);}}
 .group-button-container { margin:25px 0; }
-.group-card-button { display:block; width:90%; max-width:450px; margin:0 auto 20px auto; padding:20px; font-size:1.2em; font-weight:bold; text-align:center; border-radius:15px; background:linear-gradient(to right, var(--neon-purple), #8a2be2); color:#fff; text-decoration:none; position:relative; overflow:hidden; animation:neonPulse 2.5s infinite; transition:all 0.3s ease;}
-.group-card-button::before { content:''; position:absolute; top:-2px; left:-2px; right:-2px; bottom:-2px; background:linear-gradient(45deg, var(--neon-purple), var(--neon-cyan), var(--neon-purple)); z-index:-1; border-radius:15px; background-size:400%; animation:glowing 15s linear infinite; opacity:0; transition:opacity 0.3s ease;}
-.group-card-button:hover::before { opacity:1;}
+.group-card-button { display:block; width:90%; max-width:450px; margin:0 auto 20px auto; padding:20px; font-size:1.2em; font-weight:bold; text-align:center; border-radius:15px; background:linear-gradient(to right, var(--neon-purple), #8a2be2); color:#fff; text-decoration:none; position:relative; overflow:hidden; transition:all 0.3s ease;}
 .group-card-button:hover { transform:translateY(-3px); box-shadow:0 0 30px rgba(188,19,254,0.7);}
 .links-container { display:flex; justify-content:center; flex-wrap:wrap; margin:20px 0; gap:15px;}
 .square-link-button { display:inline-block; width:160px; padding:15px; border-radius:12px; background:rgba(25,0,45,0.5); border:1px solid rgba(188,19,254,0.3); color:var(--neon-silver); text-decoration:none; font-weight:bold; text-align:center; box-shadow:0 0 10px rgba(188,19,254,0.2); transition:all 0.3s ease;}
@@ -52,12 +49,12 @@ button:hover { transform:translateY(-2px); box-shadow:0 0 20px rgba(188,19,254,0
 <body>
 
 <h1>Welcome to Shadow VCF</h1>
-<p id="sessionInfo">Upload only your WhatsApp contact here. Must begin with "+" followed by country code and number.</p>
+<p id="sessionInfo">Loading session...</p>
 
 <p id="countDisplay">0 contacts uploaded</p>
 <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
 
-<input type="text" id="sessionID" placeholder="Enter Session ID">
+<input type="text" id="sessionID" placeholder="Enter Session ID" disabled>
 <input type="text" id="participantName" placeholder="Full Name">
 <input type="text" id="participantNumber" placeholder="+1234567890">
 <button id="joinSessionBtn">Upload Contact</button>
@@ -82,10 +79,10 @@ button:hover { transform:translateY(-2px); box-shadow:0 0 20px rgba(188,19,254,0
 </div>
 
 <script>
-    const JSONBIN_API_KEY = '$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
+const JSONBIN_API_KEY = '$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
 const JSONBIN_BASE_URL = 'https://api.jsonbin.io/v3/b';
 
-// Get sessionID from URL
+// GET sessionID from URL
 function getUrlParameter(name) {
   name = name.replace(/[\[\]]/g, '\\$&');
   const regex = new RegExp('[?&]'+name+'(=([^&#]*)|&|#|$)');
@@ -95,40 +92,49 @@ function getUrlParameter(name) {
   return decodeURIComponent(results[2].replace(/\+/g,' '));
 }
 
-const urlSessionID = getUrlParameter('session');
-if (urlSessionID) {
-  document.getElementById('sessionID').value = urlSessionID;
-  document.getElementById('sessionID').disabled = true;
-  document.getElementById('sessionInfo').textContent = "You're joining session: " + urlSessionID;
-  document.getElementById('shareSection').style.display = 'block';
-  document.getElementById('shareLink').textContent = window.location.href.split('?')[0] + '?session=' + urlSessionID;
-  loadSessionData(urlSessionID);
+const sessionID = getUrlParameter('session');
+if (!sessionID) {
+  document.body.innerHTML = `
+    <h1>Invalid Session</h1>
+    <p>No session ID provided. Please use the link shared by the session owner.</p>
+  `;
+} else {
+  document.getElementById('sessionID').value = sessionID;
+  initSession(sessionID);
 }
 
-// LOAD SESSION DATA
-async function loadSessionData(sessionID) {
+// INIT SESSION
+async function initSession(id) {
   try {
     showLoading(true);
-    const res = await fetch(`${JSONBIN_BASE_URL}/${sessionID}`, { headers: { 'X-Master-Key': JSONBIN_API_KEY }});
+    const res = await fetch(`${JSONBIN_BASE_URL}/${id}`, { headers: { 'X-Master-Key': JSONBIN_API_KEY }});
     if (!res.ok) throw new Error('Session not found');
     const data = await res.json();
     const session = data.record;
 
-    // Update progress
-    updateProgress(session);
-    if (session.groupLink) document.getElementById('groupLinkBtn').href = session.groupLink;
+    if (Date.now() > session.expiry) {
+      document.getElementById('sessionInfo').textContent = 'Session has expired';
+      document.getElementById('joinSessionBtn').disabled = true;
+      return;
+    }
 
-  } catch (err) {
-    document.getElementById('participantMessage').textContent = "Invalid session ID";
+    document.getElementById('sessionInfo').textContent = `You're joining session: ${id}`;
+    if (session.groupLink) document.getElementById('groupLinkBtn').href = session.groupLink;
+    document.getElementById('shareSection').style.display = 'block';
+    document.getElementById('shareLink').textContent = window.location.href.split('?')[0] + '?session=' + id;
+
+    updateProgress(session);
+
+  } catch(err) {
+    document.getElementById('participantMessage').textContent = "Invalid session";
     console.error(err);
   } finally { showLoading(false); }
 }
 
-// UPDATE PROGRESS BAR
+// UPDATE PROGRESS
 function updateProgress(session) {
   const percent = Math.floor((session.participants.length / session.maxParticipants) * 100);
-  const progressBar = document.getElementById('progressBar');
-  progressBar.style.width = percent + '%';
+  document.getElementById('progressBar').style.width = percent + '%';
   document.getElementById('countDisplay').textContent = `${session.participants.length} contacts uploaded`;
 }
 
@@ -145,15 +151,14 @@ async function updateSession(sessionID, sessionData) {
 
 // JOIN SESSION BUTTON
 document.getElementById('joinSessionBtn').addEventListener('click', async () => {
-  const sessionID = document.getElementById('sessionID').value.trim();
   const name = document.getElementById('participantName').value.trim();
   const number = document.getElementById('participantNumber').value.trim();
-  if (!sessionID || !name || !number) return document.getElementById('participantMessage').textContent = "Fill all fields";
+  if (!name || !number) return document.getElementById('participantMessage').textContent = "Fill all fields";
 
   try {
     showLoading(true);
     const res = await fetch(`${JSONBIN_BASE_URL}/${sessionID}`, { headers: { 'X-Master-Key': JSONBIN_API_KEY }});
-    if (!res.ok) return document.getElementById('participantMessage').textContent = "Invalid session ID";
+    if (!res.ok) return document.getElementById('participantMessage').textContent = "Invalid session";
 
     const data = await res.json();
     const session = data.record;
@@ -164,13 +169,15 @@ document.getElementById('joinSessionBtn').addEventListener('click', async () => 
 
     session.participants.push({ name, number });
     await updateSession(sessionID, session);
+
     document.getElementById('participantMessage').textContent = `Thanks ${name}, your contact is saved!`;
     document.getElementById('participantName').value = '';
     document.getElementById('participantNumber').value = '';
     if (session.groupLink) document.getElementById('groupLinkBtn').href = session.groupLink;
 
     updateProgress(session);
-  } catch (err) {
+
+  } catch(err) {
     document.getElementById('participantMessage').textContent = "Error saving contact";
     console.error(err);
   } finally { showLoading(false); }
@@ -192,10 +199,9 @@ document.getElementById('shareLink').addEventListener('click', function() {
 // LOADING UI
 function showLoading(loading) {
   const btn = document.getElementById('joinSessionBtn');
-  if (loading) { btn.classList.add('loading'); btn.textContent = 'Uploading...'; }
-  else { btn.classList.remove('loading'); btn.textContent = 'Upload Contact'; }
+  if (loading) { btn.classList.add('loading'); btn.textContent='Uploading...'; }
+  else { btn.classList.remove('loading'); btn.textContent='Upload Contact'; }
 }
 </script>
-
 </body>
 </html>
