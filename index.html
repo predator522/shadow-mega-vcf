@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shadow VCF </title>
+<title>Shadow VCF</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap');
 
@@ -294,7 +294,9 @@ tr:hover {
   <input type="text" id="groupLink" placeholder="Join the VCF group (URL)">
 </div>
 <button id="createSessionBtn">Create Session</button>
+
 <div id="sessionInfo"></div>
+
 <div id="shareSection" style="display: none;">
   <p>Share this link with participants:</p>
   <div class="share-link" id="shareLink">Click to copy</div>
@@ -316,10 +318,10 @@ tr:hover {
 </div>
 
 <script>
-    const JSONBIN_API_KEY = '$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
+const JSONBIN_API_KEY = '$2a$10$Jc3hx0ec4YQpi3NdJ9K/RuiP.1qu6idBoumzfm.cL4VzpIJ2.OW1q';
 const JSONBIN_BASE_URL = 'https://api.jsonbin.io/v3/b';
 
-// Helper: convert duration to milliseconds
+// Helper to convert duration to ms
 function durationToMs(value, unit) {
   switch (unit) {
     case 'minutes': return value * 60 * 1000;
@@ -378,27 +380,31 @@ document.getElementById('createSessionBtn').addEventListener('click', async () =
     localStorage.setItem('currentSessionID', sessionID);
 
     // Show shareable link
-const participantPageUrl = `${window.location.origin}/participant.html`;
-const shareUrl = `${participantPageUrl}?session=${sessionID}`;
+    const participantPageUrl = `${window.location.origin}/participant.html`;
+    const shareUrl = `${participantPageUrl}?session=${sessionID}`;
 
-document.getElementById('sessionInfo').innerHTML = `Session ID: <b style="color:var(--neon-cyan);">${sessionID}</b>`;
-document.getElementById('shareSection').style.display = 'block';
-document.getElementById('shareLink').textContent = shareUrl;
+    document.getElementById('sessionInfo').innerHTML = `Session ID: <b style="color:var(--neon-cyan);">${sessionID}</b>`;
+    const shareLinkEl = document.getElementById('shareLink');
+    document.getElementById('shareSection').style.display = 'block';
+    shareLinkEl.textContent = shareUrl;
 
-// Optional: make share link clickable to copy
-document.getElementById('shareLink').addEventListener('click', function() {
-  const temp = document.createElement('textarea');
-  temp.value = shareUrl;
-  document.body.appendChild(temp);
-  temp.select();
-  document.execCommand('copy');
-  document.body.removeChild(temp);
-  const original = this.textContent;
-  this.textContent = 'Copied!';
-  setTimeout(() => { this.textContent = original; }, 2000);
+    shareLinkEl.onclick = () => {
+      navigator.clipboard.writeText(shareUrl);
+      const original = shareLinkEl.textContent;
+      shareLinkEl.textContent = 'Copied!';
+      setTimeout(() => shareLinkEl.textContent = original, 2000);
+    };
+
+    renderParticipants(sessionID);
+  } catch (err) {
+    console.error(err);
+    alert("Error creating session");
+  } finally {
+    showLoading(false);
+  }
 });
 
-// RENDER PARTICIPANTS
+// Render participants
 async function renderParticipants(sessionID) {
   try {
     const data = await getBin(sessionID);
@@ -411,10 +417,12 @@ async function renderParticipants(sessionID) {
                       <td><button class="action-btn" onclick="removeParticipant(${idx})">Remove</button></td>`;
       tbody.appendChild(tr);
     });
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
-// REMOVE PARTICIPANT
+// Remove participant
 async function removeParticipant(index) {
   const sessionID = localStorage.getItem('currentSessionID');
   if (!sessionID) return;
@@ -427,7 +435,7 @@ async function removeParticipant(index) {
   } catch (err) { console.error(err); }
 }
 
-// DOWNLOAD VCF
+// Download VCF
 document.getElementById('downloadVCFBtn').addEventListener('click', async () => {
   const sessionID = localStorage.getItem('currentSessionID');
   if (!sessionID) return alert("No active session");
@@ -456,14 +464,23 @@ END:VCARD
     link.click();
     document.body.removeChild(link);
 
-    // Mark session as downloaded
     const updatedSession = { ...session, downloaded: true };
     await updateBin(sessionID, updatedSession);
     alert("Session downloaded! You can now leave.");
-  } catch (err) { console.error(err); alert("Error downloading VCF"); }
+  } catch (err) {
+    console.error(err);
+    alert("Error downloading VCF");
+  }
 });
 
-// LOCK CREATOR UNTIL DOWNLOAD OR EXPIRY
+// Loading UI
+function showLoading(loading) {
+  const btn = document.getElementById('createSessionBtn');
+  if (loading) { btn.classList.add('loading'); btn.textContent='Creating...'; }
+  else { btn.classList.remove('loading'); btn.textContent='Create Session'; }
+}
+
+// Lock creator until download or expiry
 window.addEventListener('beforeunload', async (e) => {
   const sessionID = localStorage.getItem('currentSessionID');
   if (!sessionID) return;
@@ -477,14 +494,6 @@ window.addEventListener('beforeunload', async (e) => {
     }
   } catch (err) { console.error(err); }
 });
-
-// LOADING UI
-function showLoading(loading) {
-  const btn = document.getElementById('createSessionBtn');
-  if (loading) { btn.classList.add('loading'); btn.textContent='Creating...'; }
-  else { btn.classList.remove('loading'); btn.textContent='Create Session'; }
-}
-
 </script>
 </body>
 </html>
