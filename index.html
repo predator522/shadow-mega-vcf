@@ -378,17 +378,24 @@ document.getElementById('createSessionBtn').addEventListener('click', async () =
     localStorage.setItem('currentSessionID', sessionID);
 
     // Show shareable link
-    const participantPageUrl = window.location.href.replace('owner.html', 'index.html');
-    const shareUrl = `${participantPageUrl}?session=${sessionID}`;
-    document.getElementById('sessionInfo').innerHTML = `Session ID: <b style="color:var(--neon-cyan);">${sessionID}</b>`;
-    document.getElementById('shareSection').style.display = 'block';
-    document.getElementById('shareLink').textContent = shareUrl;
+const participantPageUrl = `${window.location.origin}/participant.html`;
+const shareUrl = `${participantPageUrl}?session=${sessionID}`;
 
-    renderParticipants(sessionID);
-  } catch (err) {
-    console.error(err);
-    alert("Error creating session");
-  } finally { showLoading(false); }
+document.getElementById('sessionInfo').innerHTML = `Session ID: <b style="color:var(--neon-cyan);">${sessionID}</b>`;
+document.getElementById('shareSection').style.display = 'block';
+document.getElementById('shareLink').textContent = shareUrl;
+
+// Optional: make share link clickable to copy
+document.getElementById('shareLink').addEventListener('click', function() {
+  const temp = document.createElement('textarea');
+  temp.value = shareUrl;
+  document.body.appendChild(temp);
+  temp.select();
+  document.execCommand('copy');
+  document.body.removeChild(temp);
+  const original = this.textContent;
+  this.textContent = 'Copied!';
+  setTimeout(() => { this.textContent = original; }, 2000);
 });
 
 // RENDER PARTICIPANTS
