@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Session Dashboard</title>
+</head>
+<body>
+  <h1>Create Session</h1>
+  <form id="createSessionForm">
+    <input type="text" id="owner" placeholder="Owner name" required>
+    <input type="number" id="maxParticipants" placeholder="Max participants" required>
+    <input type="text" id="groupLink" placeholder="Group link (optional)">
+    <button type="submit">Create Session</button>
+  </form>
+
+  <div id="dashboard" style="display:none;">
+    <h2>Participants</h2>
+    <ul id="participantsList"></ul>
+    <a id="vcfDownload" href="#">Download VCF</a>
+  </div>
+
+  <script>
+    let currentSessionID = null;
+
+    document.getElementById("createSessionForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const owner = document.getElementById("owner").value;
+      const maxParticipants = document.getElementById("maxParticipants").value;
+      const groupLink = document.getElementById("groupLink").value;
+
+      const res = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner, maxParticipants, expiry: Date.now() + 86400000, groupLink })
+      });
+      const data = await res.json();
+      currentSessionID = data.sessionID;
+
+      document.getElementById("dashboard").style.display = "block";
+      loadParticipants();
+    });
+
+    async function loadParticipants() {
+      const res = await fetch(`/api/session/${currentSessionID}/participants`);
+      const participants = await res.json();
+      const list = document.getElementById("participantsList");
+      list.innerHTML = "";
+      participants.forEach(p => {
+        const li = document.createElement("li");
+        li.textContent = `${p.name} - ${p.number}`;
+        list.appendChild(li);
+      });
+
+      document.getElementById("vcfDownload").href = `/api/session/${currentSessionID}/vcf`;
+    }
+  </script>
+</body>
+</html>
