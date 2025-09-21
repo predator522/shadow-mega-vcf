@@ -1,95 +1,115 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Session Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow VCF - Owner Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#111; color:#eee; text-align:center; }
+    input, button { padding:10px; margin:5px; border-radius:6px; }
+    table { margin:20px auto; border-collapse: collapse; width:90%; max-width:700px; }
+    th, td { border:1px solid #555; padding:10px; }
+    th { background:#222; }
+    .share-link { background:#222; padding:10px; border-radius:5px; margin-top:10px; cursor:pointer; }
+  </style>
 </head>
 <body>
-  <h1>Create Session</h1>
-  <form id="createSessionForm">
-    <input type="text" id="owner" placeholder="Owner name" required>
-    <input type="number" id="maxParticipants" placeholder="Max participants" required>
-    <input type="text" id="groupLink" placeholder="Group link (optional)">
-    <button type="submit">Create Session</button>
-  </form>
 
-  <div id="dashboard" style="display:none;">
-    <h2>Participants</h2>
-    <p>Share this link: <span id="shareLink"></span></p>
-    <ul id="participantsList"></ul>
-    <a id="vcfDownload" href="#">Download VCF</a>
+  <h1>Owner Dashboard</h1>
+
+  <h2>Create a Session</h2>
+  <input type="text" id="ownerName" placeholder="Your Name">
+  <input type="number" id="maxParticipants" placeholder="Max Participants">
+  <input type="number" id="duration" placeholder="Duration (minutes)">
+  <input type="text" id="groupLink" placeholder="VCF Group Link">
+  <button id="createSessionBtn">Create Session</button>
+
+  <div id="sessionInfo"></div>
+  <div id="shareSection" style="display:none;">
+    <p>Share this link:</p>
+    <div class="share-link" id="shareLink">Click to copy</div>
   </div>
 
+  <h2>Participants</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Number</th></tr></thead>
+    <tbody id="participantsTable"></tbody>
+  </table>
+
+  <button id="downloadVCFBtn">Download VCF</button>
+
   <script>
-    let currentSessionID = localStorage.getItem("currentSessionID");
-
-    async function init() {
-      if (currentSessionID) {
-        // Check if session still exists
-        const res = await fetch(`/api/session/${currentSessionID}`);
-        if (res.ok) {
-          document.getElementById("dashboard").style.display = "block";
-          document.getElementById("createSessionForm").style.display = "none";
-          updateShareLink();
-          loadParticipants();
-        } else {
-          // Session not found, clear saved session
-          localStorage.removeItem("currentSessionID");
-        }
+    async function createSession() {
+      const owner = document.getElementById('ownerName').value.trim();
+      const maxParticipants = parseInt(document.getElementById('maxParticipants').value);
+      const duration = parseInt(document.getElementById('duration').value);
+      const groupLink = document.getElementById('groupLink').value.trim();
+      if (!owner || !maxParticipants || !duration || !groupLink) {
+        alert("Fill all fields"); return;
       }
-    }
 
-    document.getElementById("createSessionForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const owner = document.getElementById("owner").value;
-      const maxParticipants = document.getElementById("maxParticipants").value;
-      const groupLink = document.getElementById("groupLink").value;
-
-      const res = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          owner,
-          maxParticipants,
-          expiry: Date.now() + 86400000, // 24 hours
-          groupLink
-        })
+      const expiry = Date.now() + duration * 60 * 1000;
+      const res = await fetch('/api/session/create', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ owner, maxParticipants, expiry, groupLink })
       });
-
       const data = await res.json();
-      currentSessionID = data.sessionID;
-      localStorage.setItem("currentSessionID", currentSessionID);
+      localStorage.setItem('currentSessionID', data.id);
 
-      document.getElementById("dashboard").style.display = "block";
-      document.getElementById("createSessionForm").style.display = "none";
-      updateShareLink();
+      document.getElementById('sessionInfo').innerHTML = `Session ID: <b>${data.id}</b>`;
+      const shareUrl = `${window.location.origin}/participant.html?session=${data.id}`;
+      document.getElementById('shareLink').textContent = shareUrl;
+      document.getElementById('shareSection').style.display = 'block';
+
+      document.getElementById('shareLink').onclick = () => {
+        navigator.clipboard.writeText(shareUrl);
+        document.getElementById('shareLink').textContent = 'Copied!';
+        setTimeout(()=>document.getElementById('shareLink').textContent=shareUrl,2000);
+      };
+
       loadParticipants();
-    });
-
-    function updateShareLink() {
-      const link = `${window.location.origin}/participant.html?session=${currentSessionID}`;
-      document.getElementById("shareLink").textContent = link;
     }
 
     async function loadParticipants() {
-      const res = await fetch(`/api/session/${currentSessionID}/participants`);
+      const sessionID = localStorage.getItem('currentSessionID');
+      if (!sessionID) return;
+      const res = await fetch(`/api/session/${sessionID}/participants`);
       const participants = await res.json();
-      const list = document.getElementById("participantsList");
-      list.innerHTML = "";
+      const tbody = document.getElementById('participantsTable');
+      tbody.innerHTML = '';
       participants.forEach(p => {
-        const li = document.createElement("li");
-        li.textContent = `${p.name} - ${p.number}`;
-        list.appendChild(li);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.name}</td><td>${p.number}</td>`;
+        tbody.appendChild(tr);
       });
-
-      document.getElementById("vcfDownload").href = `/api/session/${currentSessionID}/vcf`;
     }
 
-    // Refresh participants every 5s
-    setInterval(() => {
-      if (currentSessionID) loadParticipants();
-    }, 5000);
+    async function downloadVCF() {
+      const sessionID = localStorage.getItem('currentSessionID');
+      if (!sessionID) return alert("No session active");
+      const res = await fetch(`/api/session/${sessionID}/participants`);
+      const participants = await res.json();
+      if (!participants.length) return alert("No participants");
 
-    init();
+      let vcf = '';
+      participants.forEach(p=>{
+        vcf += `BEGIN:VCARD\nVERSION:3.0\nFN:${p.name}\nTEL:${p.number}\nEND:VCARD\n`;
+      });
+
+      const blob = new Blob([vcf], {type:'text/vcard'});
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `session-${sessionID}.vcf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    document.getElementById('createSessionBtn').onclick = createSession;
+    document.getElementById('downloadVCFBtn').onclick = downloadVCF;
+
+    window.addEventListener('DOMContentLoaded', loadParticipants);
   </script>
 </body>
 </html>
