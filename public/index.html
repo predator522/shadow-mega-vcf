@@ -14,12 +14,29 @@
 
   <div id="dashboard" style="display:none;">
     <h2>Participants</h2>
+    <p>Share this link: <span id="shareLink"></span></p>
     <ul id="participantsList"></ul>
     <a id="vcfDownload" href="#">Download VCF</a>
   </div>
 
   <script>
-    let currentSessionID = null;
+    let currentSessionID = localStorage.getItem("currentSessionID");
+
+    async function init() {
+      if (currentSessionID) {
+        // Check if session still exists
+        const res = await fetch(`/api/session/${currentSessionID}`);
+        if (res.ok) {
+          document.getElementById("dashboard").style.display = "block";
+          document.getElementById("createSessionForm").style.display = "none";
+          updateShareLink();
+          loadParticipants();
+        } else {
+          // Session not found, clear saved session
+          localStorage.removeItem("currentSessionID");
+        }
+      }
+    }
 
     document.getElementById("createSessionForm").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -30,14 +47,28 @@
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner, maxParticipants, expiry: Date.now() + 86400000, groupLink })
+        body: JSON.stringify({
+          owner,
+          maxParticipants,
+          expiry: Date.now() + 86400000, // 24 hours
+          groupLink
+        })
       });
+
       const data = await res.json();
       currentSessionID = data.sessionID;
+      localStorage.setItem("currentSessionID", currentSessionID);
 
       document.getElementById("dashboard").style.display = "block";
+      document.getElementById("createSessionForm").style.display = "none";
+      updateShareLink();
       loadParticipants();
     });
+
+    function updateShareLink() {
+      const link = `${window.location.origin}/participant.html?session=${currentSessionID}`;
+      document.getElementById("shareLink").textContent = link;
+    }
 
     async function loadParticipants() {
       const res = await fetch(`/api/session/${currentSessionID}/participants`);
@@ -52,6 +83,13 @@
 
       document.getElementById("vcfDownload").href = `/api/session/${currentSessionID}/vcf`;
     }
+
+    // Refresh participants every 5s
+    setInterval(() => {
+      if (currentSessionID) loadParticipants();
+    }, 5000);
+
+    init();
   </script>
 </body>
 </html>
