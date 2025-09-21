@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Join Session</title>
+</head>
+<body>
+  <h1>Join Session</h1>
+  <form id="joinForm">
+    <input type="text" id="name" placeholder="Your name" required>
+    <input type="text" id="number" placeholder="Your number" required>
+    <button type="submit">Join</button>
+  </form>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionID = urlParams.get("session");
+
+    document.getElementById("joinForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("name").value;
+      const number = document.getElementById("number").value;
+
+      await fetch(`/api/session/${sessionID}/participant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, number })
+      });
+
+      alert("You have joined the session!");
+    });
+  </script>
+</body>
+</html>
