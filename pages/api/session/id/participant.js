@@ -1,21 +1,27 @@
-import { sql } from '@vercel/postgres';
+import { db } from '@vercel/postgres';
 
 export default async function handler(req, res) {
-  const { id } = req.query;
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-  if (req.method === 'POST') {
-    try {
-      const { name, number } = req.body;
-      await sql`
-        INSERT INTO participants (session_id, name, number)
-        VALUES (${id}, ${name}, ${number});
-      `;
-      res.status(200).json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  } else {
-    res.setHeader('Allow', ['POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+  const client = await db.connect();
+  const { id } = req.query;
+  const { name, number } = req.body;
+
+  try {
+    const result = await client.query(
+      `INSERT INTO participants (session_id, name, number)
+       VALUES ($1, $2, $3)
+       RETURNING id`,
+      [id, name, number]
+    );
+
+    return res.status(200).json({ participantId: result.rows[0].id });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to add participant' });
+  } finally {
+    client.release();
   }
 }
