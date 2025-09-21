@@ -11,22 +11,45 @@
     <button type="submit">Join</button>
   </form>
 
+  <p id="message"></p>
+
   <script>
+    // Get session ID from URL
     const urlParams = new URLSearchParams(window.location.search);
     const sessionID = urlParams.get("session");
 
-    document.getElementById("joinForm").addEventListener("submit", async (e) => {
+    if (!sessionID) {
+      document.body.innerHTML = "<h2>❌ No session ID provided</h2>";
+      throw new Error("No session ID");
+    }
+
+    const form = document.getElementById("joinForm");
+    const message = document.getElementById("message");
+
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
+
       const name = document.getElementById("name").value;
       const number = document.getElementById("number").value;
 
-      await fetch(`/api/session/${sessionID}/participant`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, number })
-      });
+      try {
+        const res = await fetch(`/api/session/${sessionID}/participant`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, number })
+        });
 
-      alert("You have joined the session!");
+        const data = await res.json();
+        if (res.ok) {
+          message.textContent = "✅ You have joined the session!";
+          form.style.display = "none"; // hide form after joining
+        } else {
+          message.textContent = "❌ " + (data.error || "Failed to join");
+        }
+      } catch (err) {
+        console.error(err);
+        message.textContent = "❌ Error joining session";
+      }
     });
   </script>
 </body>
